@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>WebRTC Dialer</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #f5f5f5;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+    }
+    .dialer {
+      background: #fff;
+      border-radius: 12px;
+      box-shadow: 0 2px 16px rgba(0,0,0,0.1);
+      padding: 32px;
+      width: 360px;
+    }
+    h1 { font-size: 20px; margin-bottom: 24px; text-align: center; }
+    label { display: block; font-size: 13px; color: #666; margin-bottom: 4px; }
+    input {
+      width: 100%; padding: 10px 12px; border: 1px solid #ddd;
+      border-radius: 8px; font-size: 16px; margin-bottom: 16px;
+    }
+    input:focus { outline: none; border-color: #4a90d9; }
+    .btn-group { display: flex; gap: 12px; margin-top: 8px; }
+    button {
+      flex: 1; padding: 12px; border: none; border-radius: 8px;
+      font-size: 15px; font-weight: 600; cursor: pointer; transition: opacity 0.2s;
+    }
+    button:disabled { opacity: 0.5; cursor: not-allowed; }
+    .btn-call { background: #34c759; color: #fff; }
+    .btn-hangup { background: #ff3b30; color: #fff; }
+    .status {
+      text-align: center; margin-top: 20px; padding: 10px;
+      border-radius: 8px; font-size: 14px; font-weight: 500;
+    }
+    .status-idle { background: #f0f0f0; color: #666; }
+    .status-calling { background: #fff3cd; color: #856404; }
+    .status-connected { background: #d4edda; color: #155724; }
+    .status-ended { background: #f0f0f0; color: #666; }
+    .status-error { background: #f8d7da; color: #721c24; }
+  </style>
+</head>
+<body>
+  <div class="dialer">
+    <h1>WebRTC Dialer</h1>
+    <div>
+      <label for="identity">Your Identity</label>
+      <input type="text" id="identity" placeholder="e.g. user1" value="demo-user" />
+    </div>
+    <div>
+      <label for="destination">Destination Number</label>
+      <input type="tel" id="destination" placeholder="+1234567890" />
+    </div>
+    <div class="btn-group">
+      <button class="btn-call" id="callBtn" onclick="makeCall()">Call</button>
+      <button class="btn-hangup" id="hangupBtn" onclick="hangUp()" disabled>Hang Up</button>
+    </div>
+    <div id="status" class="status status-idle">Idle</div>
+  </div>
+
+  <script src="https://unpkg.com/@telnyx/webrtc@2/lib/bundle.js"></script>
+  <script src="dialer.js"></script>
+</body>
+</html>
