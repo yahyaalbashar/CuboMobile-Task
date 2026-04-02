@@ -8,11 +8,13 @@ import { Call } from './entities/call.entity.js';
 import { CallLeg } from './entities/call-leg.entity.js';
 import { CallEvent } from './entities/call-event.entity.js';
 import { ProvidersModule } from '../providers/providers.module.js';
+import { RealtimeModule } from '../realtime/realtime.module.js';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([Call, CallLeg, CallEvent]),
     ProvidersModule,
+    RealtimeModule,
   ],
   controllers: [CallsController],
   providers: [CallsService, CallOrchestratorService, CallRepository],

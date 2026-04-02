@@ -5,11 +5,13 @@ import { CallRepository } from './repositories/call.repository.js';
 import { VOICE_PROVIDER, NormalizedEventType } from '../providers/voice-provider.interface.js';
 import { CallStatus } from './enums/call-status.enum.js';
 import { LegType, LegStatus } from './enums/leg-type.enum.js';
+import { RealtimeGateway } from '../realtime/realtime.gateway.js';
 
 describe('CallOrchestratorService', () => {
   let service: CallOrchestratorService;
   let callRepository: jest.Mocked<CallRepository>;
   let voiceProvider: any;
+  let realtimeGateway: jest.Mocked<Partial<RealtimeGateway>>;
 
   const mockCall = {
     id: 'call-uuid-1',
@@ -63,6 +65,10 @@ describe('CallOrchestratorService', () => {
       verifyWebhookSignature: jest.fn().mockReturnValue(true),
     };
 
+    realtimeGateway = {
+      emitCallStateUpdate: jest.fn(),
+    };
+
     const mockCallRepo = {
       createCall: jest.fn().mockResolvedValue(mockCall),
       findCallById: jest.fn().mockResolvedValue(mockCall),
@@ -80,6 +86,7 @@ describe('CallOrchestratorService', () => {
         CallOrchestratorService,
         { provide: VOICE_PROVIDER, useValue: voiceProvider },
         { provide: CallRepository, useValue: mockCallRepo },
+        { provide: RealtimeGateway, useValue: realtimeGateway },
         {
           provide: ConfigService,
           useValue: {

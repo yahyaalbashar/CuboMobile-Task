@@ -1,10 +1,11 @@
-import { Injectable, Inject, Logger } from '@nestjs/common';
+import { Injectable, Inject, Logger, Optional } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { CallRepository } from './repositories/call.repository.js';
 import { CallStatus, isValidTransition } from './enums/call-status.enum.js';
 import { LegType, LegStatus } from './enums/leg-type.enum.js';
 import type { VoiceProvider, NormalizedCallEvent } from '../providers/voice-provider.interface.js';
 import { NormalizedEventType, VOICE_PROVIDER } from '../providers/voice-provider.interface.js';
+import { RealtimeGateway } from '../realtime/realtime.gateway.js';
 import { Call } from './entities/call.entity.js';
 
 @Injectable()
@@ -16,6 +17,8 @@ export class CallOrchestratorService {
     private readonly voiceProvider: VoiceProvider,
     private readonly callRepository: CallRepository,
     private readonly configService: ConfigService,
+    @Optional()
+    private readonly realtimeGateway?: RealtimeGateway,
   ) {}
 
   async handleEvent(event: NormalizedCallEvent): Promise<void> {
@@ -137,7 +140,8 @@ export class CallOrchestratorService {
         await this.bridgeCall(call);
       }
     } else {
-      // Unknown leg — check client_state for PSTN correlation
+      // Unknown leg — correlate via client_state (PSTN leg answer arrived
+      // before the leg record was committed, or a race condition occurred)
       const rawPayload = event.rawPayload as {
         data: { payload: { client_state?: string } };
       };
@@ -146,30 +150,42 @@ export class CallOrchestratorService {
         : null;
 
       if (clientState?.callId) {
-        const pstnLeg =
-          await this.callRepository.findLegByProviderCallControlId(
-            event.providerCallControlId,
-          );
-        if (pstnLeg) {
-          const call = await this.callRepository.findCallById(
-            clientState.callId,
-          );
-          if (!call) return;
+        const call = await this.callRepository.findCallById(
+          clientState.callId,
+        );
+        if (!call) return;
 
-          await this.callRepository.createEvent({
+        // Find the PSTN leg among the call's existing legs
+        const legs = await this.callRepository.findLegsByCallId(call.id);
+        let pstnLeg = legs.find((l) => l.legType === LegType.PSTN);
+
+        if (!pstnLeg) {
+          // PSTN leg record not yet persisted — create it now
+          pstnLeg = await this.callRepository.createLeg({
             callId: call.id,
-            legId: pstnLeg.id,
-            providerEventType: event.eventType,
-            payload: event.rawPayload,
+            legType: LegType.PSTN,
+            providerCallControlId: event.providerCallControlId,
+            providerSessionId: event.providerSessionId || null,
+            status: LegStatus.INITIATED,
           });
-
-          await this.transitionCall(call, CallStatus.PSTN_ANSWERED);
-          await this.callRepository.updateLeg(pstnLeg.id, {
-            status: LegStatus.ANSWERED,
-          });
-
-          await this.bridgeCall(call);
+          this.logger.warn(
+            `Created missing PSTN leg for call ${call.id} from client_state correlation`,
+          );
         }
+
+        await this.callRepository.createEvent({
+          callId: call.id,
+          legId: pstnLeg.id,
+          providerEventType: event.eventType,
+          payload: event.rawPayload,
+        });
+
+        await this.transitionCall(call, CallStatus.PSTN_ANSWERED);
+        await this.callRepository.updateLeg(pstnLeg.id, {
+          status: LegStatus.ANSWERED,
+        });
+
+        await this.bridgeCall(call);
       }
     }
   }
@@ -363,6 +379,9 @@ export class CallOrchestratorService {
     }
     await this.callRepository.updateCall(call.id, { status: newStatus });
     call.status = newStatus;
+
+    // Push real-time state update to connected clients
+    this.realtimeGateway?.emitCallStateUpdate(call.id, newStatus);
   }
 
   private decodeClientState(
