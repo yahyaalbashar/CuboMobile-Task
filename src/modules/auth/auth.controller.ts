@@ -12,6 +12,7 @@ export class WebRTCTokenRequestDto {
 export class WebRTCTokenResponseDto {
   token!: string;
   identity!: string;
+  callerNumber!: string;
 }
 
 @ApiTags('Auth')

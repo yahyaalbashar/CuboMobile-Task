@@ -38,7 +38,7 @@ export interface VoiceProvider {
 
   hangup(callControlId: string): Promise<void>;
 
-  parseWebhookEvent(rawPayload: unknown): NormalizedCallEvent;
+  parseWebhookEvent(rawPayload: unknown): NormalizedCallEvent | null;
 
   verifyWebhookSignature(payload: string, signature: string): boolean;
 }

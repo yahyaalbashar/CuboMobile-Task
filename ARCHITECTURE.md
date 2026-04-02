@@ -17,10 +17,10 @@ Browser (WebRTC/SIP)  <-->  Telnyx  <-->  Real Phone (PSTN)
 The browser client uses the Telnyx WebRTC JS SDK (`@telnyx/webrtc`). After obtaining a login token via `POST /auth/webrtc-token`, the SDK connects to Telnyx over SIP/WebSocket and initiates a call.
 
 Telnyx sends a `call.initiated` webhook to our backend. We identify this as the WebRTC leg by checking two conditions:
-- `data.payload.direction === 'incoming'` — the call is incoming to our SIP connection (not outbound from our API)
 - `data.payload.connection_id` matches our configured `TELNYX_SIP_CONNECTION_ID`
+- `data.payload.client_state` is absent (PSTN legs always carry `client_state` with the encoded `callId`)
 
-This distinguishes it from PSTN legs that our backend dials outbound.
+Note: The `direction` field may be `'incoming'` or `'outgoing'` depending on SIP Connection configuration. Using `connection_id` + absence of `client_state` is the reliable method to distinguish WebRTC legs from PSTN legs.
 
 ## 2. How does the backend track and correlate each leg to a call record?
 
@@ -32,17 +32,17 @@ For the WebRTC leg, we look up the `CallLeg` by `providerCallControlId` from the
 
 ## 3. When exactly is the PSTN leg dialed and why at that point?
 
-The PSTN leg is dialed when the WebRTC leg answers (`call.answered` webhook for the WebRTC leg). We wait for the WebRTC leg to be established before dialing PSTN to avoid:
-- Wasting PSTN minutes if the WebRTC connection fails
-- Having an unanswered PSTN call with no one to bridge to
+The backend supports two modes depending on how the Telnyx SIP Connection is configured:
 
-The state transitions: `INITIATED -> WEBRTC_ANSWERED -> PSTN_DIALING`.
+**Manual mode (Call Control):** The PSTN leg is dialed when the WebRTC leg answers (`call.answered` webhook). We wait for the WebRTC leg to be established before dialing PSTN to avoid wasting PSTN minutes if the WebRTC connection fails. The state transitions: `INITIATED -> WEBRTC_ANSWERED -> PSTN_DIALING`.
+
+**Auto-bridge mode:** Some SIP Connection configurations cause Telnyx to automatically dial the destination and bridge both legs. In this case, the backend receives `call.initiated` followed directly by `call.bridged`, and the state transitions: `INITIATED -> BRIDGED`. The orchestrator handles both flows.
 
 ## 4. When exactly is the bridge command issued and why?
 
-The bridge command is issued when the PSTN leg answers (`call.answered` webhook for the PSTN leg). At this point both legs are active and ready for audio. We call `voiceProvider.bridge(webrtcCallControlId, pstnCallControlId)` to connect the audio paths.
+**Manual mode:** The bridge command is issued when the PSTN leg answers (`call.answered` webhook for the PSTN leg). At this point both legs are active and ready for audio. We call `voiceProvider.bridge(webrtcCallControlId, pstnCallControlId)` to connect the audio paths. The state transitions: `PSTN_ANSWERED -> BRIDGED`.
 
-The state transitions: `PSTN_ANSWERED -> BRIDGED`.
+**Auto-bridge mode:** Telnyx issues the bridge automatically and sends a `call.bridged` webhook. The backend records this transition without needing to issue a bridge command.
 
 ## 5. How are duplicate webhooks handled (idempotency strategy)?
 
@@ -70,7 +70,7 @@ Zero changes to `CallOrchestratorService`, `CallsService`, or any domain code.
 ## 7. What assumptions were made and why?
 
 - **One active call per user session** — simplifies state management; concurrent calls would require session-scoped call tracking
-- **WebRTC leg identified by direction + connection_id** — more reliable than client-provided flags since it uses server-side data
+- **WebRTC leg identified by connection_id + absence of client_state** — more reliable than checking `direction` since the direction field varies by SIP Connection configuration
 - **Duration = endedAt - answeredAt** — measures talk time, not ring time, which is the standard billing metric
 - **Bridging does not auto-terminate both legs** — when one side hangs up, we explicitly hang up the other side since Telnyx does not automatically do this
 - **Failed webhooks are not retried automatically** — logged as FAILED in `webhook_deliveries` to prevent infinite loops; a manual replay or dead-letter queue is the production approach
@@ -86,7 +86,7 @@ AppModule
   ├── TypeOrmModule
   ├── BullModule
   ├── AuthModule ──> ProvidersModule
-  ├── CallsModule ──> ProvidersModule
+  ├── CallsModule ──> ProvidersModule, RealtimeModule
   ├── WebhooksModule ──> CallsModule, ProvidersModule
   ├── ProvidersModule ──> TelnyxModule
   └── RealtimeModule
@@ -114,12 +114,14 @@ POST /webhooks/telnyx
 
 ```
 INITIATED
-  └─> WEBRTC_ANSWERED
-       └─> PSTN_DIALING
-            └─> PSTN_ANSWERED
-                 └─> BRIDGED
-                      └─> ENDED
-  └─> FAILED (any stage)
+  ├─> WEBRTC_ANSWERED              (manual mode)
+  │    └─> PSTN_DIALING
+  │         └─> PSTN_ANSWERED
+  │              └─> BRIDGED
+  │                   └─> ENDED
+  ├─> BRIDGED                      (auto-bridge mode)
+  │    └─> ENDED
+  ├─> FAILED (any stage)
   └─> ENDED (early hangup)
 ```
 

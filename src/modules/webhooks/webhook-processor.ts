@@ -38,6 +38,12 @@ export class WebhookProcessor extends WorkerHost {
       // Parse the raw payload into a normalized event
       const event = this.voiceProvider.parseWebhookEvent(payload);
 
+      if (!event) {
+        // Informational event (e.g. call.cost) — nothing to orchestrate
+        await this.webhooksService.markProcessed(externalEventId);
+        return;
+      }
+
       // Route to the call orchestrator
       await this.orchestrator.handleEvent(event);
 

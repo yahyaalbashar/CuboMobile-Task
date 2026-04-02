@@ -9,7 +9,7 @@ export enum CallStatus {
 }
 
 export const VALID_TRANSITIONS: Record<CallStatus, CallStatus[]> = {
-  [CallStatus.INITIATED]: [CallStatus.WEBRTC_ANSWERED, CallStatus.ENDED, CallStatus.FAILED],
+  [CallStatus.INITIATED]: [CallStatus.WEBRTC_ANSWERED, CallStatus.BRIDGED, CallStatus.ENDED, CallStatus.FAILED],
   [CallStatus.WEBRTC_ANSWERED]: [CallStatus.PSTN_DIALING, CallStatus.ENDED, CallStatus.FAILED],
   [CallStatus.PSTN_DIALING]: [CallStatus.PSTN_ANSWERED, CallStatus.ENDED, CallStatus.FAILED],
   [CallStatus.PSTN_ANSWERED]: [CallStatus.BRIDGED, CallStatus.ENDED, CallStatus.FAILED],

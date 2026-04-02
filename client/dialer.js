@@ -1,5 +1,6 @@
-/* global TelnyxRTC */
+/* global TelnyxWebRTC */
 
+const TelnyxRTC = (typeof TelnyxWebRTC !== 'undefined' && TelnyxWebRTC.TelnyxRTC) || null;
 const API_BASE = window.location.origin;
 
 let telnyxClient = null;
@@ -38,6 +39,7 @@ async function makeCall() {
     if (!res.ok) throw new Error('Failed to get token');
     const data = await res.json();
 
+    if (!TelnyxRTC) throw new Error('Telnyx WebRTC SDK failed to load');
     telnyxClient = new TelnyxRTC({ login_token: data.token });
 
     telnyxClient.on('telnyx.ready', function () {
@@ -45,7 +47,7 @@ async function makeCall() {
       activeCall = telnyxClient.newCall({
         destinationNumber: destination,
         callerName: identity,
-        callerNumber: '',
+        callerNumber: data.callerNumber || '',
       });
     });
 

@@ -117,10 +117,11 @@ describe('CallOrchestratorService', () => {
         rawPayload: {
           data: {
             payload: {
-              direction: 'incoming',
+              direction: 'outgoing',
               connection_id: 'sip-conn-1',
               from: '+1111111111',
               to: '+2222222222',
+              client_state: null,
             },
           },
         },

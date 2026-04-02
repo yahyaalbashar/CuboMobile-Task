@@ -60,10 +60,12 @@ export class CallOrchestratorService {
       '',
     );
 
-    // Check if this is the WebRTC leg (incoming to our SIP connection)
+    // Check if this is the WebRTC leg (originated from our SIP connection).
+    // The direction may be 'incoming' or 'outgoing' depending on SIP Connection
+    // configuration — the reliable indicator is matching the connection_id
+    // and having no client_state (PSTN legs always carry client_state).
     const isWebRTCLeg =
-      payload.direction === 'incoming' &&
-      payload.connection_id === sipConnectionId;
+      payload.connection_id === sipConnectionId && !payload.client_state;
 
     if (isWebRTCLeg) {
       // Step 1: Create call + WebRTC leg

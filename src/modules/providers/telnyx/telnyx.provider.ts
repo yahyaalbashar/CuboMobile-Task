@@ -132,7 +132,7 @@ export class TelnyxProvider implements VoiceProvider {
     }
   }
 
-  parseWebhookEvent(rawPayload: unknown): NormalizedCallEvent {
+  parseWebhookEvent(rawPayload: unknown): NormalizedCallEvent | null {
     return this.webhookParser.parse(rawPayload);
   }
 
