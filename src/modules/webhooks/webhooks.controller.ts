@@ -6,6 +6,8 @@ import {
   HttpCode,
   HttpStatus,
   UseGuards,
+  UsePipes,
+  ValidationPipe,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import type { Request } from 'express';
@@ -20,6 +22,17 @@ export class WebhooksController {
   @Post('telnyx')
   @HttpCode(HttpStatus.OK)
   @UseGuards(WebhookSignatureGuard)
+  // Override the global ValidationPipe for this endpoint.
+  // Telnyx webhook payloads contain arbitrary fields that are not declared in any
+  // DTO, so the global `forbidNonWhitelisted: true` setting would reject them with
+  // a 400 before the handler could persist them to webhook_deliveries.
+  @UsePipes(
+    new ValidationPipe({
+      transform: false,
+      whitelist: false,
+      forbidNonWhitelisted: false,
+    }),
+  )
   @ApiOperation({ summary: 'Telnyx webhook event ingestion' })
   @ApiResponse({ status: 200, description: 'Event received and enqueued' })
   async handleTelnyxWebhook(
